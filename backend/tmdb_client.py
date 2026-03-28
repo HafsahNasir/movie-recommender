@@ -53,11 +53,11 @@ class TMDBClient:
 
         result = {
             'tmdb_id': tmdb_id,
-            'title': hit['title'],
+            'title': hit.get('title', 'Unknown'),
             'year': int(hit['release_date'][:4]) if hit.get('release_date') else year,
             'overview': hit.get('overview', ''),
             'poster_url': poster,
-            'tmdb_rating': round(hit.get('vote_average', 0) / 2, 1),
+            'tmdb_rating': round(hit.get('vote_average', 0) / 2, 1),  # TMDB 0-10 → 0-5 scale
             'runtime': details.get('runtime'),
             'genres': genres,
             'director': director,
