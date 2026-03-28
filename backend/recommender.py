@@ -57,9 +57,19 @@ def pick_six(candidates, profile):
             selected.append(film)
             used_genres.update(film.get('genres', []))
 
+    # Fallback: fill any remaining slots from full scored pool (no constraints)
+    if len(selected) < 6:
+        for film in scored:
+            if len(selected) >= 6:
+                break
+            if film not in selected:
+                selected.append(film)
+
+    # Soft: try to include a pre-2000 film if not already present
     has_old = any((f.get('year') or 2000) < 2000 for f in selected)
     if not has_old:
-        old_films = [c for c in remaining_pool if (c.get('year') or 2000) < 2000 and c not in selected]
+        not_selected = [c for c in scored if c not in selected]
+        old_films = [c for c in not_selected if (c.get('year') or 2000) < 2000]
         if old_films and len(selected) >= 6:
             selected[-1] = old_films[0]
 

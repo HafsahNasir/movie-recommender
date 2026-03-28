@@ -48,7 +48,7 @@ def build_profile(ratings, tmdb_client):
     summary = (
         f"Loves {', '.join(top_genres) if top_genres else 'various genres'}. "
         f"Favourite directors include {', '.join(top_directors) if top_directors else 'various directors'}. "
-        f"Highly rated: {', '.join(example_titles)}."
+        + (f"Highly rated: {', '.join(example_titles)}." if example_titles else "No ratings data available.")
     )
 
     return {
