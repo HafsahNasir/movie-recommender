@@ -1,121 +1,120 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useState, useEffect } from 'react'
+import axios from 'axios'
+import HeroCard from './components/HeroCard.jsx'
+import MovieCard from './components/MovieCard.jsx'
+import ShuffleButton from './components/ShuffleButton.jsx'
 
-function App() {
-  const [count, setCount] = useState(0)
+const FLIP_DURATION = 600   // ms — matches CSS transition
+const FLIP_STAGGER  = 120   // ms between card flips
+
+export default function App() {
+  const [films, setFilms]         = useState([])
+  const [stats, setStats]         = useState(null)
+  const [loading, setLoading]     = useState(false)
+  const [flipping, setFlipping]   = useState([]) // indices currently flipping
+  const [heroIndex, setHeroIndex] = useState(0)
+  const [error, setError]         = useState(null)
+
+  useEffect(() => {
+    fetchStats()
+    fetchRecommendations()
+  }, [])
+
+  async function fetchStats() {
+    try {
+      const { data } = await axios.get('/api/stats')
+      setStats(data)
+    } catch {
+      // stats are decorative — silent fail
+    }
+  }
+
+  async function fetchRecommendations() {
+    setLoading(true)
+    setError(null)
+    try {
+      const { data } = await axios.get('/api/recommend')
+      await runFlipAnimation(data.recommendations.length)
+      setFilms(data.recommendations)
+      setHeroIndex(0)
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not load recommendations. Is the backend running?')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function runFlipAnimation(count) {
+    // Stagger flip-in across all cards
+    for (let i = 0; i < count; i++) {
+      setTimeout(() => {
+        setFlipping(prev => [...prev, i])
+        setTimeout(() => {
+          setFlipping(prev => prev.filter(x => x !== i))
+        }, FLIP_DURATION)
+      }, i * FLIP_STAGGER)
+    }
+    // Wait for all flips to complete before updating films
+    await new Promise(resolve => setTimeout(resolve, count * FLIP_STAGGER + FLIP_DURATION))
+  }
+
+  const hero = films[heroIndex] || null
+  const row  = films.filter((_, i) => i !== heroIndex)
 
   return (
     <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+      <div className="bg-blobs">
+        <div className="blob blob-1" />
+        <div className="blob blob-2" />
+        <div className="blob blob-3" />
+      </div>
 
-      <div className="ticks"></div>
+      <div className="app">
+        {/* Header */}
+        <header className="app-header">
+          <div className="header-left">
+            <div className="avatar">H</div>
+            <div>
+              <h1 className="app-title">What to Watch</h1>
+              <p className="app-sub">hafsahnasir · Letterboxd</p>
+            </div>
+          </div>
+          {stats && (
+            <div className="header-stats">
+              <span>{stats.watched_count} films watched</span>
+              <span className="stats-watchlist">{stats.watchlist_count} in watchlist</span>
+            </div>
+          )}
+        </header>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+        {error ? (
+          <div className="error-box glass">{error}</div>
+        ) : (
+          <>
+            {/* Hero */}
+            <p className="section-label">Tonight's Pick</p>
+            <HeroCard film={hero} isFlipping={flipping.includes(heroIndex)} />
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
+            {/* Row of 5 */}
+            <div className="row-header">
+              <p className="section-label" style={{ marginBottom: 0 }}>More Picks</p>
+            </div>
+            <div className="cards-row">
+              {row.map((film, i) => (
+                <MovieCard
+                  key={film.tmdb_id}
+                  film={film}
+                  isFlipping={flipping.includes(i + (i >= heroIndex ? 1 : 0))}
+                  onClick={() => setHeroIndex(films.indexOf(film))}
+                />
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Shuffle */}
+        <ShuffleButton onClick={fetchRecommendations} loading={loading} />
+      </div>
     </>
   )
 }
-
-export default App
