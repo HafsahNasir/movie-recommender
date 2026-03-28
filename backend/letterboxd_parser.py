@@ -10,10 +10,14 @@ def parse_ratings(path, min_rating=0.0):
                 rating = float(row['Rating']) if row['Rating'] else 0.0
             except ValueError:
                 rating = 0.0
+            try:
+                year = int(row['Year']) if row['Year'] else None
+            except ValueError:
+                year = None
             if rating >= min_rating:
                 results.append({
                     'title': row['Name'].strip(),
-                    'year': int(row['Year']) if row['Year'] else None,
+                    'year': year,
                     'rating': rating,
                 })
     return results
@@ -24,9 +28,13 @@ def parse_watchlist(path):
     results = []
     with open(path, newline='', encoding='utf-8') as f:
         for row in csv.DictReader(f):
+            try:
+                year = int(row['Year']) if row['Year'] else None
+            except ValueError:
+                year = None
             results.append({
                 'title': row['Name'].strip(),
-                'year': int(row['Year']) if row['Year'] else None,
+                'year': year,
             })
     return results
 
