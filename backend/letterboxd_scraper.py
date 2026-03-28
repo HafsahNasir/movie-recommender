@@ -1,46 +1,68 @@
+import os
 import requests
-from bs4 import BeautifulSoup
 
-LISTS = [
-    'https://letterboxd.com/dave/list/official-top-250-narrative-feature-films/',
-    'https://letterboxd.com/dave/list/letterboxd-top-250/',
-    'https://letterboxd.com/films/genre/horror/by/film-popularity/',
-    'https://letterboxd.com/films/genre/science-fiction/by/film-popularity/',
-    'https://letterboxd.com/films/genre/drama/by/film-popularity/',
+TMDB_BASE = 'https://api.themoviedb.org/3'
+
+# TMDB genre IDs for discovery variety
+GENRE_IDS = [
+    18,    # Drama
+    27,    # Horror
+    878,   # Science Fiction
+    9648,  # Mystery
+    53,    # Thriller
+    10749, # Romance
+    35,    # Comedy
 ]
 
-HEADERS = {'User-Agent': 'Mozilla/5.0 (compatible; movie-recommender/1.0)'}
+
+def _tmdb_headers():
+    token = os.environ.get('TMDB_READ_ACCESS_TOKEN', '')
+    return {'Authorization': f'Bearer {token}'}
 
 
-def scrape_list(url, pages=3):
-    """Scrape film titles from a Letterboxd list URL (up to `pages` pages)."""
-    titles = []
-    for page in range(1, pages + 1):
-        page_url = url if page == 1 else f"{url.rstrip('/')}/page/{page}/"
-        try:
-            resp = requests.get(page_url, headers=HEADERS, timeout=10)
-            resp.raise_for_status()
-        except requests.RequestException:
-            break
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        posters = soup.select('li.poster-container div.film-poster img[alt]')
-        if not posters:
-            break
-        for img in posters:
-            title = img.get('alt', '').strip()
-            if title:
-                titles.append(title)
-    return titles
+def _fetch_page(endpoint, params, page):
+    resp = requests.get(
+        f'{TMDB_BASE}{endpoint}',
+        headers=_tmdb_headers(),
+        params={**params, 'page': page, 'language': 'en-US'},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    return resp.json().get('results', [])
 
 
 def get_discovery_candidates():
-    """Scrape all configured lists and return a deduplicated list of film titles."""
+    """
+    Return a deduplicated list of film title strings from TMDB top-rated
+    and genre-popular lists — used as the discovery candidate pool.
+    """
     seen = set()
     results = []
-    for url in LISTS:
-        for title in scrape_list(url):
-            key = title.lower()
-            if key not in seen:
-                seen.add(key)
-                results.append(title)
+
+    def add(title):
+        key = title.lower().strip()
+        if key and key not in seen:
+            seen.add(key)
+            results.append(title.strip())
+
+    # Top-rated films (3 pages = ~60 films)
+    for page in range(1, 4):
+        for film in _fetch_page('/movie/top_rated', {}, page):
+            add(film.get('title', ''))
+
+    # Popular films (2 pages = ~40 films)
+    for page in range(1, 3):
+        for film in _fetch_page('/movie/popular', {}, page):
+            add(film.get('title', ''))
+
+    # Genre-specific popular films (1 page each)
+    for genre_id in GENRE_IDS:
+        for film in _fetch_page('/discover/movie', {
+            'with_genres': genre_id,
+            'sort_by': 'vote_count.desc',
+            'vote_count.gte': 1000,
+        }, page=1):
+            add(film.get('title', ''))
+
+    print(f'[discovery] {len(results)} candidates from TMDB', flush=True)
     return results

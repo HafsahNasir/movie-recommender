@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
+
+const API_BASE = import.meta.env.VITE_API_URL ?? ''
 import HeroCard from './components/HeroCard.jsx'
 import MovieCard from './components/MovieCard.jsx'
 import ShuffleButton from './components/ShuffleButton.jsx'
@@ -14,6 +16,8 @@ export default function App() {
   const [flipping, setFlipping]   = useState([]) // indices currently flipping
   const [heroIndex, setHeroIndex] = useState(0)
   const [error, setError]         = useState(null)
+  // Track last 5 shuffles' tmdb_ids to avoid repeat recommendations
+  const shuffleHistory = useRef([])
 
   useEffect(() => {
     fetchStats()
@@ -22,7 +26,7 @@ export default function App() {
 
   async function fetchStats() {
     try {
-      const { data } = await axios.get('/api/stats')
+      const { data } = await axios.get(`${API_BASE}/api/stats`)
       setStats(data)
     } catch {
       // stats are decorative — silent fail
@@ -33,7 +37,15 @@ export default function App() {
     setLoading(true)
     setError(null)
     try {
-      const { data } = await axios.get('/api/recommend')
+      // Build exclude list from last 5 shuffles
+      const recentIds = shuffleHistory.current.slice(-5).flat().join(',')
+      const url = recentIds ? `${API_BASE}/api/recommend?exclude=${recentIds}` : `${API_BASE}/api/recommend`
+      const { data } = await axios.get(url)
+
+      // Record this shuffle's ids
+      const newIds = data.recommendations.map(f => f.tmdb_id)
+      shuffleHistory.current = [...shuffleHistory.current, newIds]
+
       await runFlipAnimation(data.recommendations.length)
       setFilms(data.recommendations)
       setHeroIndex(0)

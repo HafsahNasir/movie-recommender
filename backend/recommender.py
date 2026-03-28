@@ -23,7 +23,7 @@ def score_candidate(candidate, profile):
     if decade:
         score += eras.get(decade, 0) * 0.5
 
-    score += random.uniform(0, 0.5)
+    score += random.uniform(0, 4.0)
     return score
 
 
@@ -33,23 +33,35 @@ def pick_six(candidates, profile):
     - At least 2 from watchlist, at least 2 from discovered
     - At least 3 different genres across the 6
     - Prefer at least 1 pre-2000 film (soft constraint)
+    Selection is randomised across the full pool so every shuffle produces fresh picks.
     """
-    scored = sorted(candidates, key=lambda c: score_candidate(c, profile), reverse=True)
+    # Attach deterministic taste scores (no jitter) for use in fill step
+    for c in candidates:
+        c['_score'] = score_candidate(c, profile)
 
-    watchlist = [c for c in scored if c.get('source') == 'watchlist']
-    discovered = [c for c in scored if c.get('source') == 'discovered']
+    watchlist = [c for c in candidates if c.get('source') == 'watchlist']
+    discovered = [c for c in candidates if c.get('source') == 'discovered']
+
+    # Shuffle entire pools — any unwatched film can surface on any shuffle
+    random.shuffle(watchlist)
+    random.shuffle(discovered)
 
     selected = []
     used_genres = set()
 
-    for pool in [watchlist[:2], discovered[:2]]:
-        for film in pool:
-            if film not in selected:
-                selected.append(film)
-                used_genres.update(film.get('genres', []))
+    # Guarantee at least 2 from each source, picked randomly
+    for pool in [watchlist, discovered]:
+        picks = pool[:min(2, len(pool))]
+        for film in picks:
+            selected.append(film)
+            used_genres.update(film.get('genres', []))
 
-    remaining_pool = [c for c in scored if c not in selected]
-    for film in remaining_pool:
+    # Fill remaining slots from the full pool, preferring genre variety
+    remaining = [c for c in candidates if c not in selected]
+    random.shuffle(remaining)
+    # Sort remaining by score so taste still guides the last 2 picks
+    remaining.sort(key=lambda c: c['_score'], reverse=True)
+    for film in remaining:
         if len(selected) >= 6:
             break
         new_genres = set(film.get('genres', [])) - used_genres
@@ -57,20 +69,24 @@ def pick_six(candidates, profile):
             selected.append(film)
             used_genres.update(film.get('genres', []))
 
-    # Fallback: fill any remaining slots from full scored pool (no constraints)
+    # Fallback: fill any remaining slots ignoring genre constraint
     if len(selected) < 6:
-        for film in scored:
+        for film in remaining:
             if len(selected) >= 6:
                 break
             if film not in selected:
                 selected.append(film)
 
-    # Soft: try to include a pre-2000 film if not already present
+    # Soft: swap last pick for a pre-2000 film if none present
     has_old = any((f.get('year') or 2000) < 2000 for f in selected)
     if not has_old:
-        not_selected = [c for c in scored if c not in selected]
+        not_selected = [c for c in candidates if c not in selected]
         old_films = [c for c in not_selected if (c.get('year') or 2000) < 2000]
-        if old_films and len(selected) >= 6:
+        if old_films:
             selected[-1] = old_films[0]
+
+    # Clean up temp score key
+    for c in candidates:
+        c.pop('_score', None)
 
     return selected[:6]

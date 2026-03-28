@@ -1,5 +1,5 @@
 import os
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from dotenv import load_dotenv
 
@@ -10,7 +10,7 @@ from recommender import pick_six
 from tmdb_client import TMDBClient
 from gemini_client import generate_blurbs
 
-load_dotenv()
+load_dotenv(override=True)
 
 app = Flask(__name__)
 CORS(app)
@@ -25,6 +25,7 @@ def get_data_paths():
     return {
         'ratings': os.path.join(data_dir, 'ratings.csv'),
         'watchlist': os.path.join(data_dir, 'watchlist.csv'),
+        'watched': os.path.join(data_dir, 'watched.csv'),
     }
 
 
@@ -44,9 +45,10 @@ def recommend():
 
     ratings = parse_ratings(paths['ratings']) if os.path.exists(paths['ratings']) else []
     watchlist = parse_watchlist(paths['watchlist']) if os.path.exists(paths['watchlist']) else []
-    watched = get_watched_titles(paths['ratings']) if os.path.exists(paths['ratings']) else set()
+    watched_films = parse_watchlist(paths['watched']) if os.path.exists(paths.get('watched', '')) else []
+    watched = get_watched_titles(paths['ratings'], paths.get('watched'))
 
-    profile = build_profile(ratings, tmdb)
+    profile = build_profile(ratings, tmdb, watched=watched_films)
 
     if _discovery_cache is None:
         _discovery_cache = get_discovery_candidates()
@@ -69,12 +71,18 @@ def recommend():
         if data:
             candidates.append({**data, 'source': 'discovered'})
 
+    # Exclude recently shown films (last 5 shuffles sent from frontend)
+    exclude_param = request.args.get('exclude', '')
+    excluded_ids = {int(x) for x in exclude_param.split(',') if x.strip().isdigit()}
+    if excluded_ids:
+        candidates = [c for c in candidates if c.get('tmdb_id') not in excluded_ids]
+
     if len(candidates) < 6:
         return jsonify({'error': 'Not enough candidates. Add more CSV data or check your data/ folder.'}), 422
 
     picks = pick_six(candidates, profile)
 
-    blurbs = generate_blurbs(picks, profile['summary'], api_key=os.environ['GEMINI_API_KEY'])
+    blurbs = generate_blurbs(picks, profile['summary'], api_key=os.environ.get('GROQ_API_KEY', ''))
     for film in picks:
         film['why'] = blurbs.get(film['title'], '')
 
@@ -90,8 +98,7 @@ def stats():
     watched_count = 0
     watchlist_count = 0
 
-    if os.path.exists(paths['ratings']):
-        watched_count = len(get_watched_titles(paths['ratings']))
+    watched_count = len(get_watched_titles(paths['ratings'], paths.get('watched')))
     if os.path.exists(paths['watchlist']):
         watchlist_count = len(parse_watchlist(paths['watchlist']))
 
@@ -102,4 +109,4 @@ def stats():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5001)

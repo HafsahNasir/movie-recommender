@@ -39,10 +39,15 @@ def parse_watchlist(path):
     return results
 
 
-def get_watched_titles(ratings_path):
-    """Return set of all watched film titles (lowercased for comparison)."""
+def get_watched_titles(ratings_path, watched_path=None):
+    """Return set of all watched film titles (lowercased for comparison).
+    Reads from ratings.csv and optionally watched.csv for full coverage."""
     titles = set()
-    with open(ratings_path, newline='', encoding='utf-8') as f:
-        for row in csv.DictReader(f):
-            titles.add(row['Name'].strip().lower())
+    for path in filter(None, [ratings_path, watched_path]):
+        try:
+            with open(path, newline='', encoding='utf-8') as f:
+                for row in csv.DictReader(f):
+                    titles.add(row['Name'].strip().lower())
+        except FileNotFoundError:
+            pass
     return titles
