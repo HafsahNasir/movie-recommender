@@ -77,10 +77,6 @@ pytest==8.2.2
 
 - [ ] **Step 2: Create .env.example**
 
-```
-TMDB_READ_ACCESS_TOKEN=your_tmdb_read_access_token_here
-GEMINI_API_KEY=your_gemini_api_key_here
-```
 
 - [ ] **Step 3: Create .gitignore**
 
